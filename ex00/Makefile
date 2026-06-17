@@ -3,7 +3,7 @@ AUTHOR = nkanaan
 COMP = c++
 FLAGS = -Wall -Wextra -Werror -std=c++98
 
-SRC = main.cpp src/BitcoinExchange.cpp 
+SRC = main.cpp src/BitcoinExchange.cpp src/utils.cpp 
 OBJS = $(addprefix objs/, $(SRC:.cpp=.o))
 
 SHELL := /bin/bash

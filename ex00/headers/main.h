@@ -42,4 +42,6 @@ typedef std::exception except;
 #define ERR_BIG "too large a number."
 #define ERR_EMPTY "database is empty."
 
+bool isValidDate(const str &date);
+
 #endif // !MAIN_H
