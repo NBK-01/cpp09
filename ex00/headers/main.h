@@ -42,6 +42,11 @@ typedef std::exception except;
 #define ERR_BIG "too large a number."
 #define ERR_EMPTY "database is empty."
 
-bool isValidDate(const str &date);
+enum ValStatus { V_OK, V_NEG, V_BIG, V_BAD };
+
+bool  isValidDate(const str &date);
+str trim(const str &s);
+ValStatus parseVal(const str &raw, float &out);
+bool  parseRate(const str &raw, float &out);
 
 #endif // !MAIN_H
