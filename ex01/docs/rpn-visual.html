@@ -1,0 +1,320 @@
+<title>RPN · Evaluating Postfix with a Stack</title>
+<meta name="description" content="A visual walkthrough of ex01: tokenizing a reverse-Polish expression and evaluating it with a single std::stack, one token at a time.">
+
+<style>
+  :root {
+    --ink: #0b0f17;
+    --panel: #121a28;
+    --panel-2: #0f1622;
+    --line: #263349;
+    --line-soft: #1b2536;
+    --fg: #e9edf6;
+    --fg-dim: #93a0b8;
+    --fg-faint: #5f6d86;
+    --num: #4fd39b;    /* operands / numbers */
+    --op: #f0b45e;     /* operators */
+    --res: #b28cf5;    /* results pushed back */
+    --err: #f2668b;    /* errors */
+    --num-bg: rgba(79,211,155,.12);
+    --op-bg: rgba(240,180,94,.13);
+    --res-bg: rgba(178,140,245,.16);
+    --err-bg: rgba(242,102,139,.12);
+    --font-mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+    --font-ui: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background:
+      radial-gradient(1200px 600px at 80% -10%, rgba(79,211,155,.06), transparent 60%),
+      radial-gradient(900px 500px at -10% 20%, rgba(178,140,245,.06), transparent 55%),
+      var(--ink);
+    color: var(--fg);
+    font-family: var(--font-ui);
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 940px; margin: 0 auto; padding: 0 24px 120px; }
+
+  .term { margin-top: 40px; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; background: linear-gradient(180deg, var(--panel), var(--panel-2)); box-shadow: 0 30px 80px -40px rgba(0,0,0,.9); }
+  .term-bar { display: flex; align-items: center; gap: 8px; padding: 12px 16px; border-bottom: 1px solid var(--line-soft); background: rgba(255,255,255,.02); }
+  .dot { width: 11px; height: 11px; border-radius: 50%; }
+  .dot.r { background: #e05561; } .dot.y { background: #d8a13a; } .dot.g { background: #4fd39b; }
+  .term-title { margin-left: 10px; font-family: var(--font-mono); font-size: 12.5px; color: var(--fg-faint); letter-spacing: .04em; }
+  .term-body { padding: 40px 34px 42px; }
+
+  .eyebrow { font-family: var(--font-mono); font-size: 12px; letter-spacing: .22em; text-transform: uppercase; color: var(--num); margin: 0 0 18px; }
+  h1 { font-family: var(--font-ui); font-weight: 800; letter-spacing: -.02em; font-size: clamp(30px, 5.4vw, 52px); line-height: 1.05; margin: 0; text-wrap: balance; }
+  h1 .sub { display: block; color: var(--fg-dim); font-weight: 500; font-size: .5em; letter-spacing: 0; margin-top: 14px; }
+  .lede { color: var(--fg-dim); font-size: 18px; max-width: 62ch; margin: 24px 0 0; }
+  .lede b { color: var(--fg); font-weight: 600; }
+  .stage-sub code, .lede code, .note code, p code, .band-item code { font-family: var(--font-mono); font-size: .9em; background: rgba(255,255,255,.05); padding: 1px 5px; border-radius: 4px; }
+
+  .io { margin-top: 34px; display: grid; gap: 14px; }
+  .io-line { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+  .io-tag { font-family: var(--font-mono); font-size: 11.5px; letter-spacing: .12em; text-transform: uppercase; color: var(--fg-faint); min-width: 58px; }
+  .cell { font-family: var(--font-mono); font-variant-numeric: tabular-nums; min-width: 42px; height: 42px; padding: 0 12px; display: inline-flex; align-items: center; justify-content: center; border: 1px solid var(--line); border-radius: 8px; color: var(--fg); font-size: 15px; background: var(--panel-2); flex: none; }
+  .cell.num { border-color: rgba(79,211,155,.55); background: var(--num-bg); color: #b6f2d7; }
+  .cell.res { border-color: var(--res); background: var(--res-bg); color: #e3d4ff; box-shadow: 0 0 0 1px rgba(178,140,245,.35), 0 0 20px -6px var(--res); }
+  .scroll { overflow-x: auto; padding-bottom: 4px; }
+  .row { display: flex; gap: 8px; flex-wrap: nowrap; align-items: stretch; }
+
+  section { margin-top: 66px; }
+  .stage-head { display: flex; align-items: baseline; gap: 16px; margin-bottom: 6px; }
+  .stage-no { font-family: var(--font-mono); font-size: 13px; color: var(--res); border: 1px solid var(--line); border-radius: 6px; padding: 2px 9px; letter-spacing: .05em; flex: none; }
+  h2 { font-size: clamp(22px, 3vw, 28px); font-weight: 700; letter-spacing: -.015em; margin: 0; text-wrap: balance; }
+  .stage-sub { color: var(--fg-dim); margin: 10px 0 24px; max-width: 68ch; }
+  h3 { font-size: 15px; letter-spacing: .01em; margin: 0 0 14px; color: var(--fg); }
+
+  /* RPN vs infix compare */
+  .compare { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 8px; }
+  .compare > div { border: 1px solid var(--line-soft); border-radius: 12px; padding: 16px 18px; background: rgba(255,255,255,.012); }
+  .compare .lbl { font-family: var(--font-mono); font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--fg-faint); margin-bottom: 10px; }
+  .compare .expr { font-family: var(--font-mono); font-size: 17px; color: var(--fg); }
+  .compare p { margin: 10px 0 0; font-size: 13px; color: var(--fg-dim); }
+  @media (max-width: 560px) { .compare { grid-template-columns: 1fr; } }
+
+  /* legend */
+  .legend { display: flex; gap: 18px; flex-wrap: wrap; margin: 22px 0 0; }
+  .legend span { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--fg-dim); font-family: var(--font-mono); }
+  .swatch { width: 13px; height: 13px; border-radius: 4px; border: 1px solid; flex: none; }
+  .sw-num { border-color: rgba(79,211,155,.55); background: var(--num-bg); }
+  .sw-op { border-color: rgba(240,180,94,.55); background: var(--op-bg); }
+  .sw-res { border-color: var(--res); background: var(--res-bg); }
+
+  /* stack trace ledger */
+  .trace { display: grid; gap: 14px; margin-top: 10px; }
+  .tstep { display: grid; grid-template-columns: 92px 1fr; gap: 18px; align-items: center; border: 1px solid var(--line-soft); border-radius: 12px; padding: 14px 18px; background: rgba(255,255,255,.012); }
+  .tstep.act { border-color: rgba(240,180,94,.4); background: var(--op-bg); }
+  .ttok { font-family: var(--font-mono); display: flex; flex-direction: column; align-items: center; gap: 4px; }
+  .ttok .t { width: 40px; height: 40px; display: inline-flex; align-items: center; justify-content: center; border-radius: 9px; font-size: 18px; font-weight: 700; border: 1px solid; }
+  .ttok .t.n { border-color: rgba(79,211,155,.55); background: var(--num-bg); color: #b6f2d7; }
+  .ttok .t.o { border-color: rgba(240,180,94,.55); background: var(--op-bg); color: #f7d9a8; }
+  .ttok .lab { font-size: 10px; letter-spacing: .08em; color: var(--fg-faint); text-transform: uppercase; }
+  .tright { display: flex; flex-direction: column; gap: 8px; }
+  .tact { font-size: 13px; color: var(--fg-dim); font-family: var(--font-mono); }
+  .tact b { color: var(--op); font-weight: 600; } .tact .g { color: var(--num); }
+  .stack { display: flex; gap: 6px; align-items: center; }
+  .stack .arrow { color: var(--fg-faint); font-family: var(--font-mono); font-size: 12px; margin-right: 4px; }
+  .sc { font-family: var(--font-mono); min-width: 38px; height: 34px; padding: 0 8px; display: inline-flex; align-items: center; justify-content: center; border: 1px solid var(--line); border-radius: 7px; font-size: 14px; background: var(--panel-2); color: var(--fg); }
+  .sc.top { border-color: rgba(79,211,155,.55); background: var(--num-bg); color: #b6f2d7; }
+  .sc.new { border-color: var(--res); background: var(--res-bg); color: #e3d4ff; }
+  .stack .empty { color: var(--fg-faint); font-family: var(--font-mono); font-size: 13px; font-style: italic; }
+
+  /* order-matters callout */
+  .om { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 8px; }
+  .om > div { border: 1px solid var(--line-soft); border-radius: 12px; padding: 16px 18px; background: rgba(255,255,255,.012); font-family: var(--font-mono); font-size: 14px; }
+  .om .good { border-color: rgba(79,211,155,.35); } .om .bad { border-color: rgba(242,102,139,.35); }
+  .om .tag { font-size: 11px; letter-spacing: .06em; text-transform: uppercase; padding: 2px 7px; border-radius: 5px; font-weight: 700; color: var(--ink); }
+  .om .tag.g { background: var(--num); } .om .tag.b { background: var(--err); }
+  .om .ln { margin-top: 12px; color: var(--fg-dim); } .om .ln b { color: var(--fg); }
+  @media (max-width: 560px) { .om { grid-template-columns: 1fr; } }
+
+  /* error cases */
+  .band { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-top: 8px; }
+  .band-item { border: 1px solid var(--line-soft); border-radius: 12px; padding: 14px 16px; background: rgba(255,255,255,.012); }
+  .band-item h3 { margin: 0 0 6px; font-size: 14px; } .band-item p { margin: 0; font-size: 13px; color: var(--fg-dim); }
+  .band-item .ex { font-family: var(--font-mono); font-size: 12.5px; color: var(--err); margin-top: 8px; }
+
+  /* code map */
+  .map { display: grid; gap: 14px; margin-top: 10px; }
+  .map-item { border: 1px solid var(--line-soft); border-radius: 12px; overflow: hidden; background: var(--panel-2); }
+  .map-cap { display: flex; align-items: center; gap: 10px; padding: 12px 16px; border-bottom: 1px solid var(--line-soft); font-size: 14px; }
+  .map-cap .tag { font-family: var(--font-mono); font-size: 11px; color: var(--ink); background: var(--num); padding: 2px 8px; border-radius: 5px; font-weight: 700; letter-spacing: .03em; }
+  .map-cap .tag.o { background: var(--op); } .map-cap .tag.r { background: var(--res); }
+  pre { margin: 0; padding: 16px 18px; overflow-x: auto; font-family: var(--font-mono); font-size: 13px; line-height: 1.7; color: #cdd6e6; }
+  .cm { color: var(--fg-faint); font-style: italic; }
+  .kw { color: #7fb0ff; } .fn { color: var(--num); } .n { color: var(--op); } .st { color: #f7d9a8; }
+
+  .callout { display: flex; gap: 14px; align-items: flex-start; margin-top: 24px; padding: 16px 18px; border: 1px solid rgba(178,140,245,.3); border-radius: 12px; background: var(--res-bg); }
+  .callout .big { font-family: var(--font-mono); font-size: 20px; color: var(--res); font-weight: 700; flex: none; line-height: 1.4; }
+  .callout p { margin: 0; color: var(--fg-dim); font-size: 14.5px; } .callout b { color: var(--fg); }
+  .note { font-size: 13.5px; color: var(--fg-faint); margin-top: 16px; font-family: var(--font-mono); }
+  hr.div { border: none; border-top: 1px solid var(--line-soft); margin: 0; }
+
+  .reveal { opacity: 0; transform: translateY(14px); transition: opacity .6s ease, transform .6s ease; }
+  .reveal.in { opacity: 1; transform: none; }
+  @media (prefers-reduced-motion: reduce) { .reveal { opacity: 1; transform: none; transition: none; } }
+  @media (max-width: 560px) { .term-body { padding: 30px 18px 34px; } .wrap { padding: 0 14px 90px; } .tstep { grid-template-columns: 1fr; gap: 12px; } }
+</style>
+
+<div class="wrap">
+
+  <div class="term">
+    <div class="term-bar">
+      <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
+      <span class="term-title">nkanaan@42 ~/cpp09/ex01 — ./RPN "3 4 + 5 *"</span>
+    </div>
+    <div class="term-body">
+      <p class="eyebrow">CPP09 · ex01 · RPN</p>
+      <h1>Postfix, One Stack
+        <span class="sub">evaluate reverse-Polish notation with nothing but push and pop</span>
+      </h1>
+      <p class="lede">Reverse Polish Notation writes the operator <b>after</b> its operands: <code>3 4 +</code> instead of <code>3 + 4</code>. That tiny reordering kills the need for parentheses and precedence rules entirely — a single <b>stack</b> and one left-to-right pass is all it takes to evaluate <i>any</i> expression.</p>
+
+      <div class="io">
+        <div class="io-line"><span class="io-tag">input</span>
+          <div class="scroll"><div class="row">
+            <span class="cell">"3 4 + 5 *"</span>
+          </div></div>
+        </div>
+        <div class="io-line"><span class="io-tag">output</span>
+          <div class="scroll"><div class="row">
+            <span class="cell res">35</span>
+          </div></div>
+        </div>
+      </div>
+      <p class="note">Reads as <code>(3 + 4) × 5</code>. The parentheses are implied by the position — never written.</p>
+    </div>
+  </div>
+
+  <!-- WHAT IS RPN -->
+  <section class="reveal">
+    <div class="stage-head"><span class="stage-no">idea</span><h2>Why postfix needs no parentheses</h2></div>
+    <p class="stage-sub">In normal (infix) math, <code>3 + 4 × 5</code> is ambiguous until you know that <code>×</code> binds tighter than <code>+</code>. Postfix removes the ambiguity by baking the order into the sequence itself — the moment you see an operator, its two operands are already sitting right in front of you.</p>
+    <div class="compare">
+      <div><div class="lbl">infix — what humans write</div><div class="expr">(3 + 4) × 5</div><p>Needs parentheses and precedence rules to know <code>+</code> happens first.</p></div>
+      <div><div class="lbl">postfix — what RPN writes</div><div class="expr">3 4 + 5 ×</div><p>Unambiguous. Scan left to right; an operator always acts on the two most-recent values.</p></div>
+    </div>
+  </section>
+
+  <!-- THE STACK TRACE -->
+  <section class="reveal">
+    <div class="stage-head"><span class="stage-no">01</span><h2>The one rule, applied token by token</h2></div>
+    <p class="stage-sub">Walk the tokens left to right. Two cases only: a <b style="color:var(--num)">number</b> gets pushed onto the stack; an <b style="color:var(--op)">operator</b> pops the top two, combines them, and pushes the single result back. Here is <code>"3 4 + 5 *"</code> traced in full — the stack shown bottom → top after each step.</p>
+
+    <div class="legend" style="margin-bottom:20px">
+      <span><i class="swatch sw-num"></i> number → push</span>
+      <span><i class="swatch sw-op"></i> operator → pop 2, combine, push</span>
+      <span><i class="swatch sw-res"></i> result pushed back</span>
+    </div>
+
+    <div class="trace">
+      <div class="tstep">
+        <div class="ttok"><span class="t n">3</span><span class="lab">number</span></div>
+        <div class="tright"><div class="tact">push <span class="g">3</span></div>
+          <div class="stack"><span class="arrow">stack:</span><span class="sc new">3</span></div></div>
+      </div>
+      <div class="tstep">
+        <div class="ttok"><span class="t n">4</span><span class="lab">number</span></div>
+        <div class="tright"><div class="tact">push <span class="g">4</span></div>
+          <div class="stack"><span class="arrow">stack:</span><span class="sc">3</span><span class="sc new">4</span></div></div>
+      </div>
+      <div class="tstep act">
+        <div class="ttok"><span class="t o">+</span><span class="lab">operator</span></div>
+        <div class="tright"><div class="tact">pop <b>b=4</b>, pop <b>a=3</b> → push <b>a+b = 7</b></div>
+          <div class="stack"><span class="arrow">stack:</span><span class="sc new">7</span></div></div>
+      </div>
+      <div class="tstep">
+        <div class="ttok"><span class="t n">5</span><span class="lab">number</span></div>
+        <div class="tright"><div class="tact">push <span class="g">5</span></div>
+          <div class="stack"><span class="arrow">stack:</span><span class="sc">7</span><span class="sc new">5</span></div></div>
+      </div>
+      <div class="tstep act">
+        <div class="ttok"><span class="t o">*</span><span class="lab">operator</span></div>
+        <div class="tright"><div class="tact">pop <b>b=5</b>, pop <b>a=7</b> → push <b>a×b = 35</b></div>
+          <div class="stack"><span class="arrow">stack:</span><span class="sc new">35</span></div></div>
+      </div>
+      <div class="tstep">
+        <div class="ttok"><span class="t" style="border-color:var(--res);background:var(--res-bg);color:#e3d4ff">✓</span><span class="lab">done</span></div>
+        <div class="tright"><div class="tact">input exhausted — stack holds exactly one value</div>
+          <div class="stack"><span class="arrow">result:</span><span class="sc new">35</span></div></div>
+      </div>
+    </div>
+    <div class="callout">
+      <span class="big">size==1</span>
+      <p><b>The final check.</b> A well-formed expression leaves <b>exactly one</b> value on the stack. Anything else — zero, or more than one leftover — means the input was malformed.</p>
+    </div>
+  </section>
+
+  <!-- ORDER MATTERS -->
+  <section class="reveal">
+    <div class="stage-head"><span class="stage-no">02</span><h2>The subtlety: which operand is which</h2></div>
+    <p class="stage-sub">For <code>+</code> and <code>×</code> order doesn't matter, but for <code>-</code> and <code>/</code> it absolutely does. The stack pops in <b>reverse</b> of how things went in: the <b>first pop is the right operand</b> (<code>b</code>), the second pop is the left (<code>a</code>). So <code>"7 3 -"</code> must compute <code>a − b = 7 − 3</code>, not <code>3 − 7</code>.</p>
+    <div class="om">
+      <div class="good"><span class="tag g">correct</span><div class="ln" style="margin-top:14px"><code>b = pop() → 3</code><br><code>a = pop() → 7</code><br><b>a − b = 7 − 3 = 4</b> ✓</div></div>
+      <div class="bad"><span class="tag b">the trap</span><div class="ln" style="margin-top:14px">If you did <code>top − second</code> instead you'd get<br><b>3 − 7 = −4</b> ✗<br>Same for division.</div></div>
+    </div>
+    <p class="note">In the code: <code>b = _stack.top(); _stack.pop(); a = _stack.top(); _stack.pop();</code> then <code>apply(a, b, op)</code>.</p>
+  </section>
+
+  <!-- CONSTRAINTS & ERRORS -->
+  <section class="reveal">
+    <div class="stage-head"><span class="stage-no">03</span><h2>What counts as valid — and every way it can fail</h2></div>
+    <p class="stage-sub">The subject restricts operands to <b>single digits (0–9)</b> and operators to <code>+ − × ÷</code>. So each token must be exactly one character. Anything outside that, or a stack that doesn't balance, throws immediately with a clear message.</p>
+    <div class="band">
+      <div class="band-item"><h3>Token longer than 1 char</h3><p>Multi-digit or garbage tokens are rejected up front.</p><div class="ex">"42 5 +" → bad expression</div></div>
+      <div class="band-item"><h3>Operator, too few operands</h3><p>An operator needs 2 values waiting. Fewer than 2 on the stack → error.</p><div class="ex">"3 +" → bad expression</div></div>
+      <div class="band-item"><h3>Leftover operands</h3><p>Ends with more than one value on the stack — operators are missing.</p><div class="ex">"3 4 5 +" → bad expression</div></div>
+      <div class="band-item"><h3>Unknown character</h3><p>Anything that isn't a digit or a known operator.</p><div class="ex">"3 4 %" → bad expression</div></div>
+      <div class="band-item"><h3>Division by zero</h3><p>Caught inside <code>apply()</code> before the divide happens.</p><div class="ex">"5 0 /" → division by zero</div></div>
+    </div>
+  </section>
+
+  <!-- CODE MAP -->
+  <section class="reveal">
+    <div class="stage-head"><span class="stage-no">code</span><h2>The entire evaluator in one loop</h2></div>
+    <p class="stage-sub">The class wraps a single <code>std::stack&lt;double&gt;</code>. Tokenizing is handed to an <code>istringstream</code> (it splits on whitespace for free), so <code>evaluate()</code> is just the rule above written out.</p>
+
+    <div class="map">
+      <div class="map-item">
+        <div class="map-cap"><span class="tag">01</span> Tokenize &amp; branch — <code>RPN::evaluate</code></div>
+<pre>std::istringstream iss(expr);
+str tok;
+<span class="kw">while</span> (iss &gt;&gt; tok) {                 <span class="cm">// split on whitespace</span>
+  <span class="kw">if</span> (tok.<span class="fn">size</span>() != <span class="n">1</span>)
+    <span class="kw">throw</span> std::runtime_error(ERR_BAD); <span class="cm">// single char only</span>
+  <span class="kw">char</span> c = tok[<span class="n">0</span>];
+  <span class="kw">if</span> (std::<span class="fn">isdigit</span>(c))
+    _stack.<span class="fn">push</span>(c - <span class="st">'0'</span>);          <span class="cm">// number → push</span></pre>
+      </div>
+
+      <div class="map-item">
+        <div class="map-cap"><span class="tag o">02</span> Operator — pop two in the right order, push one</div>
+<pre>  <span class="kw">else if</span> (c==<span class="st">'+'</span>||c==<span class="st">'-'</span>||c==<span class="st">'*'</span>||c==<span class="st">'/'</span>) {
+    <span class="kw">if</span> (_stack.<span class="fn">size</span>() &lt; <span class="n">2</span>)
+      <span class="kw">throw</span> std::runtime_error(ERR_BAD);
+    <span class="kw">double</span> b = _stack.<span class="fn">top</span>(); _stack.<span class="fn">pop</span>(); <span class="cm">// right operand</span>
+    <span class="kw">double</span> a = _stack.<span class="fn">top</span>(); _stack.<span class="fn">pop</span>(); <span class="cm">// left operand</span>
+    _stack.<span class="fn">push</span>(<span class="fn">apply</span>(a, b, c));
+  } <span class="kw">else</span>
+    <span class="kw">throw</span> std::runtime_error(ERR_BAD);   <span class="cm">// unknown token</span>
+}</pre>
+      </div>
+
+      <div class="map-item">
+        <div class="map-cap"><span class="tag r">03</span> Final check &amp; the math — <code>apply</code></div>
+<pre><span class="kw">if</span> (_stack.<span class="fn">size</span>() != <span class="n">1</span>)           <span class="cm">// must balance to one</span>
+  <span class="kw">throw</span> std::runtime_error(ERR_BAD);
+<span class="kw">return</span> _stack.<span class="fn">top</span>();
+
+<span class="cm">// apply(a, b, op):</span>
+<span class="kw">case</span> <span class="st">'/'</span>:
+  <span class="kw">if</span> (b == <span class="n">0</span>) <span class="kw">throw</span> std::runtime_error(ERR_DIV);
+  <span class="kw">return</span> a / b;                    <span class="cm">// a is left, b is right</span></pre>
+      </div>
+    </div>
+    <div class="callout">
+      <span class="big">O(n)</span>
+      <p><b>One pass, one stack.</b> Each token is touched exactly once and does constant work — the whole evaluation is linear in the number of tokens, with no backtracking and no parse tree.</p>
+    </div>
+  </section>
+
+  <hr class="div">
+  <p class="note" style="margin-top:28px">RPN · stack-based postfix evaluation · CPP09 ex01 · traced from <code>ex01/src/RPN.cpp</code></p>
+
+</div>
+
+<script>
+  (function () {
+    var els = document.querySelectorAll('.reveal');
+    if (!('IntersectionObserver' in window) || matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      els.forEach(function (e) { e.classList.add('in'); });
+      return;
+    }
+    var io = new IntersectionObserver(function (entries) {
+      entries.forEach(function (en) { if (en.isIntersecting) { en.target.classList.add('in'); io.unobserve(en.target); } });
+    }, { threshold: 0.12 });
+    els.forEach(function (e) { io.observe(e); });
+  })();
+</script>

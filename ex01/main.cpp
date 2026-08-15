@@ -1,4 +1,4 @@
-#include "headers/BitcoinExchange.h"
+#include "headers/RPN.h"
 
 int main(int argc, char **argv) {
   if (argc != 2) {
@@ -6,9 +6,9 @@ int main(int argc, char **argv) {
     return (1);
   }
   try {
-    BitcoinExchange btc;
-    btc.loadDB("data.csv");
-    btc.processInput(argv[1]);
+    RPN rpn;
+    double result = rpn.evaluate(argv[1]);
+    std::cout << GREEN << result << RESET << std::endl;
   } catch (const except &e) {
     std::cerr << RED "Error: " RESET << e.what() << std::endl;
     return (1);

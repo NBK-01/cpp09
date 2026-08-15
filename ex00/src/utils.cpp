@@ -1,13 +1,11 @@
 #include "../headers/main.h"
 #include <cstdlib>
 
-static bool isLeapYear(int y)
-{
+static bool isLeapYear(int y) {
   return ((y % 4 == 0 && y % 100 != 0) || (y % 400 == 0));
 }
 
-bool isValidDate(const str &date)
-{
+bool isValidDate(const str &date) {
   if (date.size() != 10)
     return (false);
   if (date[4] != '-' || date[7] != '-')
@@ -28,13 +26,12 @@ bool isValidDate(const str &date)
   int dim[] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
   if (m == 2 && isLeapYear(y))
     dim[1] = 29;
-  if (d < dim[m - 1])
+  if (d > dim[m - 1])
     return (false);
   return (true);
 }
 
-str trim(const str &s)
-{
+str trim(const str &s) {
   size_t a = 0;
   size_t b = s.size();
   while (a < b && std::isspace(static_cast<unsigned char>(s[a])))
@@ -44,8 +41,7 @@ str trim(const str &s)
   return (s.substr(a, b - a));
 }
 
-ValStatus parseVal(const str &raw, float &out)
-{
+ValStatus parseVal(const str &raw, float &out) {
   if (raw.empty())
     return (V_BAD);
   const char *c = raw.c_str();
@@ -56,21 +52,20 @@ ValStatus parseVal(const str &raw, float &out)
     return (V_BAD);
   if (v < 0)
     return (V_NEG);
-  if (V > 1000)
+  if (v > 1000)
     return (V_BIG);
   out = static_cast<float>(v);
   return (V_OK);
 }
 
-bool  parseRate(const str &raw, float &out)
-{
+bool parseRate(const str &raw, float &out) {
   if (raw.empty())
     return (false);
   const char *c = raw.c_str();
   char *end;
   errno = 0;
   double v = std::strtod(c, &end);
-  if (end == c, || *end != '\0')
+  if (end == c || *end != '\0')
     return (false);
   out = static_cast<float>(v);
   return (true);
