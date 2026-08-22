@@ -3,3 +3,8 @@ objs/
 ex00/btc
 ex01/RPN
 ex02/PmergeMe
+
+# local-only files, kept on disk but never submitted
+CPP_STYLE_GUIDE.md
+docs/
+en.subject.pdf
