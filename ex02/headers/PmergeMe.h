@@ -8,11 +8,11 @@ private:
   std::vector<int> _vec;
   std::deque<int> _deq;
 
+public:
+  /*------- Orthodox Canonical Form -------*/
+  PmergeMe();
   PmergeMe(const PmergeMe &cpy);
   PmergeMe &operator=(const PmergeMe &cpy);
-
-public:
-  PmergeMe();
   ~PmergeMe();
 
   void parse(int argc, char **argv);

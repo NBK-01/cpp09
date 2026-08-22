@@ -18,9 +18,11 @@ BitcoinExchange::~BitcoinExchange() {}
 void BitcoinExchange::loadDB(const str &path) {
   std::ifstream in(path.c_str());
   if (!in.is_open())
-    throw std::runtime_error(ERR_OPEN);
+    throw std::runtime_error(str(ERR_OPEN_DB) + path);
   str line;
-  std::getline(in, line); // header: date,exchange_rate
+  // no blind skip of line 1: the "date,exchange_rate" header fails
+  // isValidDate and gets dropped by the same check every other malformed
+  // row goes through, so a headerless csv keeps all of its entries.
   while (std::getline(in, line)) {
     line = trim(line);
     if (line.empty())
@@ -48,13 +50,31 @@ float BitcoinExchange::getRate(const str &date) const {
   return (it->second);
 }
 
+// the "date | value" header is optional, so skip the first line only when it
+// really is that header. Skipping it blindly ate the first entry of every
+// input file that did not have one.
+static bool isHeaderLine(const str &line) {
+  str s;
+  for (size_t i = 0; i < line.size(); ++i) {
+    unsigned char c = static_cast<unsigned char>(line[i]);
+    if (!std::isspace(c))
+      s += static_cast<char>(std::tolower(c));
+  }
+  return (s == "date|value");
+}
+
 void BitcoinExchange::processInput(const str &path) {
   std::ifstream in(path.c_str());
   if (!in.is_open())
     throw std::runtime_error(ERR_OPEN);
   str line;
-  std::getline(in, line); // header: date | value
+  bool firstLine = true;
   while (std::getline(in, line)) {
+    if (firstLine) {
+      firstLine = false;
+      if (isHeaderLine(line))
+        continue;
+    }
     if (trim(line).empty())
       continue;
     size_t bar = line.find('|');

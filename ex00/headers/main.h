@@ -33,6 +33,7 @@ typedef std::exception except;
 #define ARG_ERR "usage: ./btc <input.txt>"
 
 #define ERR_OPEN "could not open file."
+#define ERR_OPEN_DB "could not open database file: "
 #define ERR_BAD "bad input => "
 #define ERR_NEG "not a positive number."
 #define ERR_BIG "too large a number."
