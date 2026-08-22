@@ -41,6 +41,15 @@ void PmergeMe::parse(int argc, char **argv) {
 
 /*--------- Ford-Johnson (merge-insertion) ----------*/
 
+// Each element is carried as (value, id). The id is unique and stable across
+// every recursion level, so a plain std::vector scratch table keyed by id can
+// recover each big's smaller partner after the recursion reorders the bigs.
+// That replaces the old std::map (ex00's container, forbidden here) while
+// staying duplicate-safe: equal values never collide because ids are unique.
+typedef std::pair<int, int> Elem; // (value, id)
+
+static bool byValue(const Elem &a, const Elem &b) { return (a.first < b.first); }
+
 // order in which the smaller partners get inserted: front element first, then
 // the rest grouped by Jacobsthal numbers. pend is 0-indexed (pend[0] == b1 is
 // placed separately), so this returns the 0-based order 2,1, 4,3, 10..5, ...
@@ -69,46 +78,55 @@ static std::vector<size_t> jacobOrder(size_t m) {
   return (order);
 }
 
-template <typename Cont> static void fordJohnson(Cont &data) {
-  typedef typename Cont::value_type T;
+// Cont is a container of Elem (std::vector<Elem> or std::deque<Elem>).
+// idCap is the number of distinct ids (== original element count), used to size
+// the id-keyed recovery table.
+template <typename Cont> static void fordJohnson(Cont &data, size_t idCap) {
   typedef typename Cont::iterator Iter;
   size_t n = data.size();
   if (n < 2)
     return;
 
   bool hasStraggler = (n % 2 == 1);
-  T straggler = T();
+  Elem straggler = Elem();
   if (hasStraggler)
     straggler = data[n - 1];
 
-  // 1. pair up: bigs holds the larger of each pair, partners maps big -> smalls.
-  //    keying by value keeps every b <= its matched a even with duplicates,
-  //    which is all the bound in step 4 needs to stay correct.
+  // 1. pair up: bigs holds the larger of each pair, pend0 the aligned smaller.
+  //    loserOf[bigId] remembers each big's partner so it survives the reorder
+  //    the recursion below performs (map-free, keyed by the unique id).
   Cont bigs;
-  std::map<T, std::vector<T> > partners;
+  Cont pend0;
+  std::vector<Elem> loserOf(idCap);
   for (size_t i = 0; i + 1 < n; i += 2) {
-    T a = data[i];
-    T b = data[i + 1];
-    if (a < b)
+    Elem a = data[i];
+    Elem b = data[i + 1];
+    if (a.first < b.first)
       std::swap(a, b);
     bigs.push_back(a);
-    partners[a].push_back(b);
+    pend0.push_back(b);
+    loserOf[a.second] = b;
   }
 
   // 2. recursively sort the bigs -> the ascending backbone of the main chain
-  fordJohnson(bigs);
+  fordJohnson(bigs, idCap);
 
-  // 3. recover each big's smaller partner, aligned to the sorted bigs
+  // 3. recover each big's smaller partner, aligned to the sorted bigs, then
+  //    append the straggler (if any) as pend's last, partner-less element so
+  //    it joins the very same Jacobsthal insertion order as everyone else
+  //    instead of being tacked on afterwards with an extra full-range search.
   Cont pend;
-  for (size_t i = 0; i < bigs.size(); ++i) {
-    std::vector<T> &q = partners[bigs[i]];
-    pend.push_back(q.back());
-    q.pop_back();
-  }
+  for (size_t i = 0; i < bigs.size(); ++i)
+    pend.push_back(loserOf[bigs[i].second]);
+  if (hasStraggler)
+    pend.push_back(straggler);
 
   // 4. merge-insertion. chain starts as the sorted bigs; aPos[j] tracks the live
-  //    index of bigs[j] inside chain so every b can be inserted with a search
-  //    BOUNDED by its own partner's position (that bound is the whole point).
+  //    index of bigs[j] inside chain so every pend[j] that has a partner can be
+  //    inserted with a search BOUNDED by that partner's position (that bound is
+  //    the whole point). pend's last slot may be the straggler: it has no entry
+  //    in aPos (j == aPos.size() once it comes up), so its search runs
+  //    unbounded, all the way to chain.end(), instead.
   Cont chain(bigs.begin(), bigs.end());
   std::vector<size_t> aPos(bigs.size());
   for (size_t j = 0; j < bigs.size(); ++j)
@@ -122,8 +140,9 @@ template <typename Cont> static void fordJohnson(Cont &data) {
   std::vector<size_t> order = jacobOrder(pend.size());
   for (size_t o = 0; o < order.size(); ++o) {
     size_t j = order[o];
-    Iter last = chain.begin() + aPos[j]; // b[j] <= a[j], so it lands before a[j]
-    Iter it = std::lower_bound(chain.begin(), last, pend[j]);
+    // b[j] <= a[j], so it lands before a[j]; the straggler has no a[j] at all.
+    Iter last = (j < aPos.size()) ? chain.begin() + aPos[j] : chain.end();
+    Iter it = std::lower_bound(chain.begin(), last, pend[j], byValue);
     size_t p = static_cast<size_t>(it - chain.begin());
     chain.insert(it, pend[j]);
     for (size_t t = 0; t < aPos.size(); ++t)
@@ -131,11 +150,6 @@ template <typename Cont> static void fordJohnson(Cont &data) {
         aPos[t] += 1;
   }
 
-  // the straggler has no partner, so it gets a full-range binary search
-  if (hasStraggler) {
-    Iter it = std::lower_bound(chain.begin(), chain.end(), straggler);
-    chain.insert(it, straggler);
-  }
   data = chain;
 }
 
@@ -148,15 +162,38 @@ template <typename Cont> static void printSeq(const str &label, const Cont &c) {
   std::cout << std::endl;
 }
 
+// tag raw values with unique ids so the sort can recover partners map-free
+template <typename Raw, typename Tagged>
+static void tag(const Raw &src, Tagged &dst) {
+  for (size_t i = 0; i < src.size(); ++i)
+    dst.push_back(Elem(src[i], static_cast<int>(i)));
+}
+
+template <typename Tagged, typename Raw>
+static void untag(const Tagged &src, Raw &dst) {
+  dst.clear();
+  for (size_t i = 0; i < src.size(); ++i)
+    dst.push_back(src[i].first);
+}
+
 void PmergeMe::run() {
   printSeq(GREEN "Before: " RESET, _vec);
 
+  // Each clock covers the full data management + sorting part for its
+  // container: tagging the raw values, running Ford-Johnson, then untagging
+  // back, all inside the same timed window.
   std::clock_t s1 = std::clock();
-  fordJohnson(_vec);
+  std::vector<Elem> tv;
+  tag(_vec, tv);
+  fordJohnson(tv, tv.size());
+  untag(tv, _vec);
   std::clock_t e1 = std::clock();
 
   std::clock_t s2 = std::clock();
-  fordJohnson(_deq);
+  std::deque<Elem> td;
+  tag(_deq, td);
+  fordJohnson(td, td.size());
+  untag(td, _deq);
   std::clock_t e2 = std::clock();
 
   printSeq(GREEN "After:  " RESET, _vec);

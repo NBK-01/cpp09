@@ -1,8 +1,6 @@
 #ifndef MAIN_H
 #define MAIN_H
 
-#pragma once
-
 #include <algorithm>
 #include <cctype>
 #include <cerrno>
@@ -13,11 +11,11 @@
 #include <iomanip>
 #include <iostream>
 #include <limits>
-#include <map>
 #include <ostream>
 #include <sstream>
 #include <stdexcept>
 #include <string>
+#include <utility>
 #include <vector>
 
 typedef std::string str;
