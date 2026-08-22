@@ -2,14 +2,12 @@
 #define MAIN_H
 
 #include <cctype>
-#include <cerrno>
 #include <cstdlib>
 #include <exception>
 #include <fstream>
 #include <iostream>
 #include <map>
 #include <ostream>
-#include <sstream>
 #include <stdexcept>
 #include <string>
 

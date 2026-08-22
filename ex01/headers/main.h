@@ -2,7 +2,6 @@
 #define MAIN_H
 
 #include <cctype>
-#include <cstdlib>
 #include <exception>
 #include <iostream>
 #include <ostream>

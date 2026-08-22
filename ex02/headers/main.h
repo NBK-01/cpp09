@@ -3,7 +3,6 @@
 
 #include <algorithm>
 #include <cctype>
-#include <cerrno>
 #include <cstdlib>
 #include <ctime>
 #include <deque>

@@ -27,7 +27,6 @@ void PmergeMe::parse(int argc, char **argv) {
         if (!std::isdigit(static_cast<unsigned char>(tok[j])))
           throw std::runtime_error(ERR_BAD);
       char *end;
-      errno = 0;
       long v = std::strtol(tok.c_str(), &end, 10);
       if (*end != '\0' || v < 0 || v > std::numeric_limits<int>::max())
         throw std::runtime_error(ERR_BAD);
@@ -92,11 +91,10 @@ template <typename Cont> static void fordJohnson(Cont &data, size_t idCap) {
   if (hasStraggler)
     straggler = data[n - 1];
 
-  // 1. pair up: bigs holds the larger of each pair, pend0 the aligned smaller.
-  //    loserOf[bigId] remembers each big's partner so it survives the reorder
-  //    the recursion below performs (map-free, keyed by the unique id).
+  // 1. pair up: bigs holds the larger of each pair, and loserOf[bigId]
+  //    remembers each big's partner so it survives the reorder the recursion
+  //    below performs (map-free, keyed by the unique id).
   Cont bigs;
-  Cont pend0;
   std::vector<Elem> loserOf(idCap);
   for (size_t i = 0; i + 1 < n; i += 2) {
     Elem a = data[i];
@@ -104,7 +102,6 @@ template <typename Cont> static void fordJohnson(Cont &data, size_t idCap) {
     if (a.first < b.first)
       std::swap(a, b);
     bigs.push_back(a);
-    pend0.push_back(b);
     loserOf[a.second] = b;
   }
 

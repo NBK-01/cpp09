@@ -46,7 +46,6 @@ ValStatus parseVal(const str &raw, float &out) {
     return (V_BAD);
   const char *c = raw.c_str();
   char *end;
-  errno = 0;
   double v = std::strtod(c, &end);
   if (end == c || *end != '\0')
     return (V_BAD);
@@ -65,7 +64,6 @@ bool parseRate(const str &raw, float &out) {
     return (false);
   const char *c = raw.c_str();
   char *end;
-  errno = 0;
   double v = std::strtod(c, &end);
   if (end == c || *end != '\0')
     return (false);
