@@ -247,8 +247,11 @@ void PmergeMe::run() {
             << " elements with std::deque  : " << us2 << " us" RESET
             << std::endl;
 #ifdef COUNT_CMP
+  // stderr on purpose: the subject pins four lines to standard output and
+  // requires the second container's time to be the LAST of them. Keeping the
+  // counter off stdout leaves that contract intact even while it is enabled.
   long bound = fjBound(_vec.size());
-  std::cout << MAGENTA "Comparisons: vector " << vecCmp << ", deque " << deqCmp
+  std::cerr << MAGENTA "Comparisons: vector " << vecCmp << ", deque " << deqCmp
             << "  |  Ford-Johnson optimum F(" << _vec.size() << ") = " << bound
             << (vecCmp <= bound ? "  OK" : "  OVER") << RESET << std::endl;
 #endif
