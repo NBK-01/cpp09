@@ -50,6 +50,8 @@ ValStatus parseVal(const str &raw, float &out) {
   double v = std::strtod(c, &end);
   if (end == c || *end != '\0')
     return (V_BAD);
+  if (v != v)
+    return (V_BAD);
   if (v < 0)
     return (V_NEG);
   if (v > 1000)
@@ -66,6 +68,8 @@ bool parseRate(const str &raw, float &out) {
   errno = 0;
   double v = std::strtod(c, &end);
   if (end == c || *end != '\0')
+    return (false);
+  if (v != v)
     return (false);
   out = static_cast<float>(v);
   return (true);

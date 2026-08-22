@@ -1,8 +1,6 @@
 #ifndef MAIN_H
 #define MAIN_H
 
-#pragma once
-
 #include <cctype>
 #include <cerrno>
 #include <cstdlib>
@@ -32,9 +30,7 @@ typedef std::exception except;
 #define CYAN "\e[36m"
 #define WHITE "\e[37m"
 
-#define ARG_ERR                                                                \
-  "no arguments given: format must be ./btc [input.txt] (optional: "           \
-  "[data.csv])"
+#define ARG_ERR "usage: ./btc <input.txt>"
 
 #define ERR_OPEN "could not open file."
 #define ERR_BAD "bad input => "
