@@ -47,7 +47,23 @@ void PmergeMe::parse(int argc, char **argv) {
 // staying duplicate-safe: equal values never collide because ids are unique.
 typedef std::pair<int, int> Elem; // (value, id)
 
-static bool byValue(const Elem &a, const Elem &b) { return (a.first < b.first); }
+// Defense aid: uncomment the line below to also print how many comparisons the
+// sort really used, next to the Ford-Johnson optimum F(n). Off by default, and
+// the preprocessor strips every trace of it when it is off.
+// #define COUNT_CMP
+
+#ifdef COUNT_CMP
+static long g_cmp = 0;
+#endif
+
+// every value comparison in the algorithm goes through here, so the counter
+// above sees all of them. Identical to a plain a.first < b.first.
+static bool byValue(const Elem &a, const Elem &b) {
+#ifdef COUNT_CMP
+  ++g_cmp;
+#endif
+  return (a.first < b.first);
+}
 
 // order in which the smaller partners get inserted: front element first, then
 // the rest grouped by Jacobsthal numbers. pend is 0-indexed (pend[0] == b1 is
@@ -99,7 +115,7 @@ template <typename Cont> static void fordJohnson(Cont &data, size_t idCap) {
   for (size_t i = 0; i + 1 < n; i += 2) {
     Elem a = data[i];
     Elem b = data[i + 1];
-    if (a.first < b.first)
+    if (byValue(a, b))
       std::swap(a, b);
     bigs.push_back(a);
     loserOf[a.second] = b;
@@ -173,18 +189,41 @@ static void untag(const Tagged &src, Raw &dst) {
     dst.push_back(src[i].first);
 }
 
+#ifdef COUNT_CMP
+// F(n) = sum over k = 1..n of ceil(log2(3k/4)), the number of comparisons
+// merge-insertion needs in the worst case. Integer-only: c is the smallest
+// exponent with 4 * 2^c >= 3k, so there are no rounding surprises.
+static long fjBound(size_t n) {
+  long total = 0;
+  for (size_t k = 1; k <= n; ++k) {
+    long c = 0;
+    while ((4L << c) < 3L * static_cast<long>(k))
+      ++c;
+    total += c;
+  }
+  return (total);
+}
+#endif
+
 void PmergeMe::run() {
   printSeq(GREEN "Before: " RESET, _vec);
 
   // Each clock covers the full data management + sorting part for its
   // container: tagging the raw values, running Ford-Johnson, then untagging
   // back, all inside the same timed window.
+#ifdef COUNT_CMP
+  g_cmp = 0;
+#endif
   std::clock_t s1 = std::clock();
   std::vector<Elem> tv;
   tag(_vec, tv);
   fordJohnson(tv, tv.size());
   untag(tv, _vec);
   std::clock_t e1 = std::clock();
+#ifdef COUNT_CMP
+  long vecCmp = g_cmp;
+  g_cmp = 0;
+#endif
 
   std::clock_t s2 = std::clock();
   std::deque<Elem> td;
@@ -192,6 +231,9 @@ void PmergeMe::run() {
   fordJohnson(td, td.size());
   untag(td, _deq);
   std::clock_t e2 = std::clock();
+#ifdef COUNT_CMP
+  long deqCmp = g_cmp;
+#endif
 
   printSeq(GREEN "After:  " RESET, _vec);
 
@@ -204,4 +246,10 @@ void PmergeMe::run() {
   std::cout << YELLOW "Time to process a range of " << _deq.size()
             << " elements with std::deque  : " << us2 << " us" RESET
             << std::endl;
+#ifdef COUNT_CMP
+  long bound = fjBound(_vec.size());
+  std::cout << MAGENTA "Comparisons: vector " << vecCmp << ", deque " << deqCmp
+            << "  |  Ford-Johnson optimum F(" << _vec.size() << ") = " << bound
+            << (vecCmp <= bound ? "  OK" : "  OVER") << RESET << std::endl;
+#endif
 }
