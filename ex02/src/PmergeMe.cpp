@@ -14,8 +14,6 @@ PmergeMe &PmergeMe::operator=(const PmergeMe &cpy) {
 
 PmergeMe::~PmergeMe() {}
 
-/*--------- Parsing ----------*/
-
 void PmergeMe::parse(int argc, char **argv) {
   if (argc < 2)
     throw std::runtime_error(ARG_ERR);
@@ -38,26 +36,17 @@ void PmergeMe::parse(int argc, char **argv) {
     throw std::runtime_error(ERR_BAD);
 }
 
-/*--------- Ford-Johnson (merge-insertion) ----------*/
+// (value, id): the id survives the reorders, so partners are recovered without
+// a map, and duplicates never collide
+typedef std::pair<int, int> Elem;
 
-// Each element is carried as (value, id). The id is unique and stable across
-// every recursion level, so a plain std::vector scratch table keyed by id can
-// recover each big's smaller partner after the recursion reorders the bigs.
-// That replaces the old std::map (ex00's container, forbidden here) while
-// staying duplicate-safe: equal values never collide because ids are unique.
-typedef std::pair<int, int> Elem; // (value, id)
-
-// Defense aid: uncomment the line below to also print how many comparisons the
-// sort really used, next to the Ford-Johnson optimum F(n). Off by default, and
-// the preprocessor strips every trace of it when it is off.
-// #define COUNT_CMP
+// comment out to drop the comparison counter
+#define COUNT_CMP
 
 #ifdef COUNT_CMP
 static long g_cmp = 0;
 #endif
 
-// every value comparison in the algorithm goes through here, so the counter
-// above sees all of them. Identical to a plain a.first < b.first.
 static bool byValue(const Elem &a, const Elem &b) {
 #ifdef COUNT_CMP
   ++g_cmp;
@@ -65,21 +54,18 @@ static bool byValue(const Elem &a, const Elem &b) {
   return (a.first < b.first);
 }
 
-// order in which the smaller partners get inserted: front element first, then
-// the rest grouped by Jacobsthal numbers. pend is 0-indexed (pend[0] == b1 is
-// placed separately), so this returns the 0-based order 2,1, 4,3, 10..5, ...
-// i.e. the 1-indexed sequence b3,b2, b5,b4, b11..b6, ... shifted to 0-based.
+// b3,b2, b5,b4, b11..b6, ... : Jacobsthal groups walked backwards, 0-based
 static std::vector<size_t> jacobOrder(size_t m) {
   std::vector<size_t> order;
   if (m <= 1)
     return (order);
-  size_t prevPeak = 1;   // last 1-indexed position already placed (b1)
-  size_t jPrev = 1;      // J2
-  size_t jCurr = 3;      // J3 -> the first Jacobsthal peak
+  size_t prevPeak = 1; // b1 is already placed
+  size_t jPrev = 1;
+  size_t jCurr = 3;
   while (prevPeak < m) {
-    size_t peak = (jCurr > m) ? m : jCurr; // clamp to the last real position
+    size_t peak = (jCurr > m) ? m : jCurr;
     for (size_t p = peak; p >= prevPeak + 1; --p) {
-      order.push_back(p - 1); // 1-indexed position -> 0-based pend index
+      order.push_back(p - 1);
       if (p == prevPeak + 1)
         break;
     }
@@ -93,9 +79,6 @@ static std::vector<size_t> jacobOrder(size_t m) {
   return (order);
 }
 
-// Cont is a container of Elem (std::vector<Elem> or std::deque<Elem>).
-// idCap is the number of distinct ids (== original element count), used to size
-// the id-keyed recovery table.
 template <typename Cont> static void fordJohnson(Cont &data, size_t idCap) {
   typedef typename Cont::iterator Iter;
   size_t n = data.size();
@@ -107,9 +90,7 @@ template <typename Cont> static void fordJohnson(Cont &data, size_t idCap) {
   if (hasStraggler)
     straggler = data[n - 1];
 
-  // 1. pair up: bigs holds the larger of each pair, and loserOf[bigId]
-  //    remembers each big's partner so it survives the reorder the recursion
-  //    below performs (map-free, keyed by the unique id).
+  // 1. pair up; loserOf keeps each big's partner across the recursion
   Cont bigs;
   std::vector<Elem> loserOf(idCap);
   for (size_t i = 0; i + 1 < n; i += 2) {
@@ -121,31 +102,25 @@ template <typename Cont> static void fordJohnson(Cont &data, size_t idCap) {
     loserOf[a.second] = b;
   }
 
-  // 2. recursively sort the bigs -> the ascending backbone of the main chain
+  // 2. sort the bigs
   fordJohnson(bigs, idCap);
 
-  // 3. recover each big's smaller partner, aligned to the sorted bigs, then
-  //    append the straggler (if any) as pend's last, partner-less element so
-  //    it joins the very same Jacobsthal insertion order as everyone else
-  //    instead of being tacked on afterwards with an extra full-range search.
+  // 3. line the partners up with the sorted bigs, straggler last
   Cont pend;
   for (size_t i = 0; i < bigs.size(); ++i)
     pend.push_back(loserOf[bigs[i].second]);
   if (hasStraggler)
     pend.push_back(straggler);
 
-  // 4. merge-insertion. chain starts as the sorted bigs; aPos[j] tracks the live
-  //    index of bigs[j] inside chain so every pend[j] that has a partner can be
-  //    inserted with a search BOUNDED by that partner's position (that bound is
-  //    the whole point). pend's last slot may be the straggler: it has no entry
-  //    in aPos (j == aPos.size() once it comes up), so its search runs
-  //    unbounded, all the way to chain.end(), instead.
+  // 4. merge-insertion: aPos[j] tracks bigs[j] inside chain, so each pend[j] is
+  //    inserted by a search bounded by its partner -- that bound is the whole
+  //    point. The straggler has no partner and searches unbounded.
   Cont chain(bigs.begin(), bigs.end());
   std::vector<size_t> aPos(bigs.size());
   for (size_t j = 0; j < bigs.size(); ++j)
     aPos[j] = j;
 
-  // b1 is smaller than every big, so it always lands at the very front
+  // b1 is below the smallest big
   chain.insert(chain.begin(), pend[0]);
   for (size_t j = 0; j < aPos.size(); ++j)
     aPos[j] += 1;
@@ -153,7 +128,6 @@ template <typename Cont> static void fordJohnson(Cont &data, size_t idCap) {
   std::vector<size_t> order = jacobOrder(pend.size());
   for (size_t o = 0; o < order.size(); ++o) {
     size_t j = order[o];
-    // b[j] <= a[j], so it lands before a[j]; the straggler has no a[j] at all.
     Iter last = (j < aPos.size()) ? chain.begin() + aPos[j] : chain.end();
     Iter it = std::lower_bound(chain.begin(), last, pend[j], byValue);
     size_t p = static_cast<size_t>(it - chain.begin());
@@ -166,8 +140,6 @@ template <typename Cont> static void fordJohnson(Cont &data, size_t idCap) {
   data = chain;
 }
 
-/*--------- Output ----------*/
-
 template <typename Cont> static void printSeq(const str &label, const Cont &c) {
   std::cout << label;
   for (typename Cont::const_iterator it = c.begin(); it != c.end(); ++it)
@@ -175,7 +147,6 @@ template <typename Cont> static void printSeq(const str &label, const Cont &c) {
   std::cout << std::endl;
 }
 
-// tag raw values with unique ids so the sort can recover partners map-free
 template <typename Raw, typename Tagged>
 static void tag(const Raw &src, Tagged &dst) {
   for (size_t i = 0; i < src.size(); ++i)
@@ -190,9 +161,7 @@ static void untag(const Tagged &src, Raw &dst) {
 }
 
 #ifdef COUNT_CMP
-// F(n) = sum over k = 1..n of ceil(log2(3k/4)), the number of comparisons
-// merge-insertion needs in the worst case. Integer-only: c is the smallest
-// exponent with 4 * 2^c >= 3k, so there are no rounding surprises.
+// F(n) = sum of ceil(log2(3k/4)) for k in 1..n, the merge-insertion worst case
 static long fjBound(size_t n) {
   long total = 0;
   for (size_t k = 1; k <= n; ++k) {
@@ -208,9 +177,6 @@ static long fjBound(size_t n) {
 void PmergeMe::run() {
   printSeq(GREEN "Before: " RESET, _vec);
 
-  // Each clock covers the full data management + sorting part for its
-  // container: tagging the raw values, running Ford-Johnson, then untagging
-  // back, all inside the same timed window.
 #ifdef COUNT_CMP
   g_cmp = 0;
 #endif
@@ -247,9 +213,7 @@ void PmergeMe::run() {
             << " elements with std::deque  : " << us2 << " us" RESET
             << std::endl;
 #ifdef COUNT_CMP
-  // stderr on purpose: the subject pins four lines to standard output and
-  // requires the second container's time to be the LAST of them. Keeping the
-  // counter off stdout leaves that contract intact even while it is enabled.
+  // stderr: stdout must end with the second container's time
   long bound = fjBound(_vec.size());
   std::cerr << MAGENTA "Comparisons: vector " << vecCmp << ", deque " << deqCmp
             << "  |  Ford-Johnson optimum F(" << _vec.size() << ") = " << bound

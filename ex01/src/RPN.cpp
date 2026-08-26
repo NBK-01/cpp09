@@ -12,8 +12,6 @@ RPN &RPN::operator=(const RPN &cpy) {
 
 RPN::~RPN() {}
 
-/*--------- Member functions ----------*/
-
 static double apply(double a, double b, char op) {
   switch (op) {
   case '+':

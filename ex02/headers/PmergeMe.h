@@ -9,7 +9,6 @@ private:
   std::deque<int> _deq;
 
 public:
-  /*------- Orthodox Canonical Form -------*/
   PmergeMe();
   PmergeMe(const PmergeMe &cpy);
   PmergeMe &operator=(const PmergeMe &cpy);
