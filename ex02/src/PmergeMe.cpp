@@ -40,7 +40,6 @@ void PmergeMe::parse(int argc, char **argv) {
 // a map, and duplicates never collide
 typedef std::pair<int, int> Elem;
 
-// comment out to drop the comparison counter
 #define COUNT_CMP
 
 #ifdef COUNT_CMP
@@ -59,7 +58,7 @@ static std::vector<size_t> jacobOrder(size_t m) {
   std::vector<size_t> order;
   if (m <= 1)
     return (order);
-  size_t prevPeak = 1; // b1 is already placed
+  size_t prevPeak = 1;
   size_t jPrev = 1;
   size_t jCurr = 3;
   while (prevPeak < m) {
@@ -90,7 +89,6 @@ template <typename Cont> static void fordJohnson(Cont &data, size_t idCap) {
   if (hasStraggler)
     straggler = data[n - 1];
 
-  // 1. pair up; loserOf keeps each big's partner across the recursion
   Cont bigs;
   std::vector<Elem> loserOf(idCap);
   for (size_t i = 0; i + 1 < n; i += 2) {
@@ -102,25 +100,19 @@ template <typename Cont> static void fordJohnson(Cont &data, size_t idCap) {
     loserOf[a.second] = b;
   }
 
-  // 2. sort the bigs
   fordJohnson(bigs, idCap);
 
-  // 3. line the partners up with the sorted bigs, straggler last
   Cont pend;
   for (size_t i = 0; i < bigs.size(); ++i)
     pend.push_back(loserOf[bigs[i].second]);
   if (hasStraggler)
     pend.push_back(straggler);
 
-  // 4. merge-insertion: aPos[j] tracks bigs[j] inside chain, so each pend[j] is
-  //    inserted by a search bounded by its partner -- that bound is the whole
-  //    point. The straggler has no partner and searches unbounded.
   Cont chain(bigs.begin(), bigs.end());
   std::vector<size_t> aPos(bigs.size());
   for (size_t j = 0; j < bigs.size(); ++j)
     aPos[j] = j;
 
-  // b1 is below the smallest big
   chain.insert(chain.begin(), pend[0]);
   for (size_t j = 0; j < aPos.size(); ++j)
     aPos[j] += 1;
@@ -160,20 +152,6 @@ static void untag(const Tagged &src, Raw &dst) {
     dst.push_back(src[i].first);
 }
 
-#ifdef COUNT_CMP
-// F(n) = sum of ceil(log2(3k/4)) for k in 1..n, the merge-insertion worst case
-static long fjBound(size_t n) {
-  long total = 0;
-  for (size_t k = 1; k <= n; ++k) {
-    long c = 0;
-    while ((4L << c) < 3L * static_cast<long>(k))
-      ++c;
-    total += c;
-  }
-  return (total);
-}
-#endif
-
 void PmergeMe::run() {
   printSeq(GREEN "Before: " RESET, _vec);
 
@@ -187,8 +165,7 @@ void PmergeMe::run() {
   untag(tv, _vec);
   std::clock_t e1 = std::clock();
 #ifdef COUNT_CMP
-  long vecCmp = g_cmp;
-  g_cmp = 0;
+  long cmp = g_cmp;
 #endif
 
   std::clock_t s2 = std::clock();
@@ -197,9 +174,6 @@ void PmergeMe::run() {
   fordJohnson(td, td.size());
   untag(td, _deq);
   std::clock_t e2 = std::clock();
-#ifdef COUNT_CMP
-  long deqCmp = g_cmp;
-#endif
 
   printSeq(GREEN "After:  " RESET, _vec);
 
@@ -214,9 +188,6 @@ void PmergeMe::run() {
             << std::endl;
 #ifdef COUNT_CMP
   // stderr: stdout must end with the second container's time
-  long bound = fjBound(_vec.size());
-  std::cerr << MAGENTA "Comparisons: vector " << vecCmp << ", deque " << deqCmp
-            << "  |  Ford-Johnson optimum F(" << _vec.size() << ") = " << bound
-            << (vecCmp <= bound ? "  OK" : "  OVER") << RESET << std::endl;
+  std::cerr << MAGENTA "Comparisons: " << cmp << RESET << std::endl;
 #endif
 }

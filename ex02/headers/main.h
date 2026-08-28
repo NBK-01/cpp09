@@ -37,4 +37,4 @@ typedef std::exception except;
 #define ARG_ERR "usage: ./PmergeMe <positive int sequence>  (e.g. 3 5 9 7 4)"
 #define ERR_BAD "bad input, feed me positive integers only."
 
-#endif // !MAIN_H
+#endif

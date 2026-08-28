@@ -16,4 +16,4 @@ public:
   double evaluate(const str &expr);
 };
 
-#endif // !RPN_H
+#endif

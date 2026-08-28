@@ -18,8 +18,6 @@ void BitcoinExchange::loadDB(const str &path) {
   if (!in.is_open())
     throw std::runtime_error(str(ERR_OPEN_DB) + path);
   str line;
-  // no blind skip of line 1: the header fails isValidDate like any other
-  // malformed row, so a headerless csv keeps all of its entries
   while (std::getline(in, line)) {
     line = trim(line);
     if (line.empty())
@@ -41,13 +39,12 @@ float BitcoinExchange::getRate(const str &date) const {
   std::map<str, float>::const_iterator it = _db.lower_bound(date);
   if (it != _db.end() && it->first == date)
     return (it->second);
-  if (it == _db.begin()) // no earlier date exists => treat as bad input
+  if (it == _db.begin())
     throw std::runtime_error(ERR_BAD);
   --it;
   return (it->second);
 }
 
-// the "date | value" header is optional: skip line 1 only when it really is one
 static bool isHeaderLine(const str &line) {
   str s;
   for (size_t i = 0; i < line.size(); ++i) {

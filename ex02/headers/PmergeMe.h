@@ -18,4 +18,4 @@ public:
   void run();
 };
 
-#endif // !PMERGEME_H
+#endif

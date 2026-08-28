@@ -44,4 +44,4 @@ str trim(const str &s);
 ValStatus parseVal(const str &raw, float &out);
 bool  parseRate(const str &raw, float &out);
 
-#endif // !MAIN_H
+#endif

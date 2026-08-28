@@ -31,4 +31,4 @@ typedef std::exception except;
 #define ERR_BAD "bad expression, do it yourself."
 #define ERR_DIV "division by zero, nice try."
 
-#endif // !MAIN_H
+#endif
